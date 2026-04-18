@@ -50,7 +50,6 @@ class ProjectTrailerToolWindowFactory : ToolWindowFactory {
         private val project = toolWindow.project
         private val log = thisLogger()
 
-        // Главный метод: Создаем вкладки и объединяем работу команды!
         fun getContent(): JComponent {
             val tabbedPane = JBTabbedPane()
             tabbedPane.addTab("Project Tour", createTourPanel())
@@ -58,18 +57,13 @@ class ProjectTrailerToolWindowFactory : ToolWindowFactory {
             return tabbedPane
         }
 
-        // ========================================================
-        // ВКЛАДКА 1: ВАША РАБОТА (Tour UI)
-        // ========================================================
         private fun createTourPanel(): JPanel {
             val mainPanel = JBPanel<JBPanel<*>>(BorderLayout())
 
-            // Верх
             val topPanel = JPanel(FlowLayout(FlowLayout.LEFT))
             val btnStartTour = JButton(ProjectTrailerBundle.message("tour.start"))
             topPanel.add(btnStartTour)
 
-            // Центр
             val centerPanel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
                 border = JBUI.Borders.empty(10)
             }
@@ -84,7 +78,6 @@ class ProjectTrailerToolWindowFactory : ToolWindowFactory {
             centerPanel.add(titleLabel, BorderLayout.NORTH)
             centerPanel.add(explanationArea, BorderLayout.CENTER)
 
-            // Низ
             val bottomPanel = JPanel(BorderLayout())
             val navButtonsPanel = JPanel(FlowLayout(FlowLayout.CENTER))
             val btnPrev = JButton(ProjectTrailerBundle.message("tour.prev")).apply { isEnabled = false }
@@ -104,25 +97,45 @@ class ProjectTrailerToolWindowFactory : ToolWindowFactory {
             mainPanel.add(centerPanel, BorderLayout.CENTER)
             mainPanel.add(bottomPanel, BorderLayout.SOUTH)
 
-            // Магия: Связываем ваш UI с кодом напарника!
+            val controller = TourController(
+                project = project,
+                onStepChanged = { step, currentIndex, totalSteps ->
+                    titleLabel.text = "${currentIndex + 1}. ${step.path}"
+                    explanationArea.text = step.explanation
+                    counterLabel.text = ProjectTrailerBundle.message("tour.counter", currentIndex + 1, totalSteps)
+
+                    btnPrev.isEnabled = currentIndex > 0
+                    btnNext.isEnabled = currentIndex < totalSteps - 1
+                    btnClose.isEnabled = true
+                },
+                onTourClosed = {
+                    titleLabel.text = ProjectTrailerBundle.message("tour.welcome")
+                    explanationArea.text = ""
+                    counterLabel.text = ""
+
+                    btnPrev.isEnabled = false
+                    btnNext.isEnabled = false
+                    btnClose.isEnabled = false
+                    btnStartTour.isEnabled = true
+                }
+            )
+
+            btnPrev.addActionListener { controller.prev() }
+            btnNext.addActionListener { controller.next() }
+            btnClose.addActionListener { controller.close() }
+
             btnStartTour.addActionListener {
                 titleLabel.text = ProjectTrailerBundle.message("tour.generating")
                 explanationArea.text = ""
                 btnStartTour.isEnabled = false
 
                 ApplicationManager.getApplication().executeOnPooledThread {
-                    // Вызываем реальный AI-сервис напарника
                     val result = TourService.getInstance(project).generate()
 
                     ApplicationManager.getApplication().invokeLater {
                         result.onSuccess { steps ->
                             if (steps.isNotEmpty()) {
-                                // Показываем первый шаг из реального ответа ИИ!
-                                titleLabel.text = "1. ${steps[0].path}"
-                                explanationArea.text = steps[0].explanation
-                                counterLabel.text = ProjectTrailerBundle.message("tour.counter", 1, steps.size)
-                                btnNext.isEnabled = steps.size > 1
-                                btnClose.isEnabled = true
+                                controller.start(steps)
                             } else {
                                 titleLabel.text = "Tour is empty."
                                 btnStartTour.isEnabled = true
@@ -139,9 +152,6 @@ class ProjectTrailerToolWindowFactory : ToolWindowFactory {
             return mainPanel
         }
 
-        // ========================================================
-        // ВКЛАДКА 2: РАБОТА НАПАРНИКА (Chat & Debug)
-        // ========================================================
         private fun createChatAndDebugPanel(): JPanel {
             return JPanel(BorderLayout()).apply {
                 add(debugBar(), BorderLayout.NORTH)
@@ -212,9 +222,6 @@ class ProjectTrailerToolWindowFactory : ToolWindowFactory {
             }
         }
 
-        // ========================================================
-        // ВНУТРЕННИЕ КЛАССЫ НАПАРНИКА ДЛЯ ЧАТА
-        // ========================================================
         private inner class ChatPanel {
             private val messages = JPanel().apply {
                 layout = BoxLayout(this, BoxLayout.Y_AXIS)
