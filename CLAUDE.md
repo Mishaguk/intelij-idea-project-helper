@@ -39,4 +39,13 @@ Pre-made IntelliJ run configs live in `.run/` (`Run Plugin`, `Run Tests`, `Run V
 
 ## CI
 
-`.github/workflows/` contains `build.yml`, `release.yml`, `run-ui-tests.yml` (template defaults). Dependabot is configured via `.github/dependabot.yml`. Repository URL: `https://github.com/Mishaguk/ProjectTrailer`.
+`.github/workflows/` contains `build.yml`, `release.yml`, `run-ui-tests.yml` (template defaults). Dependabot is configured via `.github/dependabot.yml`. Repository URL: `https://github.com/Mishaguk/Project-Trailer` (matches `pluginRepositoryUrl` in `gradle.properties`; note the hyphen).
+
+## AI integration (`ai/` package)
+
+The `com.github.mishaguk.projecttrailer.ai` package holds the OpenAI-backed features (chat + project tour generation + folder-structure scanning). Key points:
+
+- **API key loading**: `AiKeyProvider` (APP-level service) reads the key from a classpath resource named by `AiConfig.ENV_RESOURCE` (`env.local`), parsing `OPENAI_API_KEY=...` (supports `#` comments and quoted values). The file is expected on the plugin classpath — typically `src/main/resources/env.local`, which must **not** be committed. No key → services degrade gracefully (see call sites).
+- **Central config**: `AiConfig` pins `BASE_URL`, `MODEL` (`gpt-4o-mini`), the env resource name, and the key name. Change model/base URL here rather than inlining.
+- **HTTP layer**: `OpenAiClient` is the single transport; `ChatService` and `TourService` are higher-level features that should go through it. `ProjectStructureScanner` produces the project-tree context; `TourSchema`/`TourStep` define the structured-output format.
+- When adding AI features, wire them through `AiKeyProvider` + `OpenAiClient` rather than re-reading env files or building new HTTP clients.
